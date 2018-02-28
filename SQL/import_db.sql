@@ -44,7 +44,7 @@ CREATE TABLE question_likes (
 );
 
 INSERT INTO
-    users (fname, lname)
+  users (fname, lname)
 VALUES
   ("Chris", "Tsai");
 
@@ -57,3 +57,18 @@ INSERT INTO
   questions (title, body, author_id)
 VALUES
   ("Whatsup?", "Whatsgoing on dog?", (SELECT id FROM users WHERE fname = 'Chris'));
+
+INSERT INTO
+  questions (title, body, author_id)
+VALUES
+  ("ABC", "Alphabets", (SELECT id FROM users WHERE fname = 'Atai'));
+
+INSERT INTO
+  question_follows (user_id, question_id)
+VALUES
+  ((SELECT id FROM users WHERE fname = 'Atai'), (SELECT id FROM questions WHERE title = "Whatsup?"));
+
+INSERT INTO
+  replies (question_id, reply_author, body)
+VALUES
+  ((SELECT id FROM questions WHERE title = 'ABC'), (SELECT id FROM users WHERE fname = 'Atai'), 'That''s nice');
