@@ -83,6 +83,10 @@ class Users
     Users.new(user.first)
   end
 
+  def followed_questions
+    QuestionFollow.followed_questions_for_user_id(self.id)
+  end
+
   attr_reader :id
 
   def initialize(options)
@@ -122,6 +126,10 @@ class Question
   def self.all
     data = QuoraDBConnection.instance.execute("SELECT * FROM questions")
     data.map { |datum| Question.new(datum) }
+  end
+
+  def self.most_followed(n)
+    QuestionFollow.most_followed_questions(n)
   end
 
   def self.find_by_title(title)
@@ -181,6 +189,10 @@ class Question
     Replies.find_by_question_id(self.id)
   end
 
+  def followers
+    QuestionFollow.followers_for_question_id(self.id)
+  end
+
   def create
     raise "#{self} already in database" if @id
     QuoraDBConnection.instance.execute(<<-SQL, @title, @body, @author_id)
@@ -228,16 +240,33 @@ class QuestionFollow
     QuestionFollow.new(ques.first)
   end
 
+  def self.most_followed_questions(n)
+    QuoraDBConnection.instance.execute(<<-SQL, n)
+      SELECT
+        questions.*
+      FROM
+        questions
+      JOIN
+        question_follows ON questions.id = question_follows.question_id
+      GROUP BY
+       question_follows.question_id
+      ORDER BY
+      COUNT(question_follows.question_id)
+       DESC
+      LIMIT(?)
+    SQL
+  end
+
   def self.followers_for_question_id(question_id)
     QuoraDBConnection.instance.execute(<<-SQL, question_id)
       SELECT
-        users.id, users.fname, users.lname
+        users.*
       FROM
         users
       JOIN
-        questions ON users.id = questions.author_id
+        question_follows ON users.id = question_follows.user_id
       WHERE
-        questions.id = ?
+        question_follows.question_id = ?
     SQL
   end
 
@@ -414,7 +443,6 @@ class QuestionLikes
     QuestionLikes.new(ques.first)
   end
 
-
   def initialize(options)
     @id = options['id']
     @user_id = options['user_id']
@@ -430,6 +458,38 @@ class QuestionLikes
         (?, ?)
     SQL
     @id = QuoraDBConnection.instance.last_insert_row_id
+  end
+
+  def self.likers_for_question_id(question_id)
+    QuoraDBConnection.instance.execute(<<-SQL, question_id)
+      SELECT
+        DISTINCT users.*
+      FROM
+        users
+      JOIN
+        question_likes ON users.id = question_likes.user_id
+      WHERE
+        question_likes.question_id = ?
+    SQL
+  end
+
+  def self.likes_questions_for_user_id(user_id)
+    QuoraDBConnection.instance.execute(<<-SQL, user_id)
+      SELECT
+        questions.*
+      FROM
+        questions
+      JOIN
+        question_likes ON questions.id = question_likes.question_id
+      WHERE
+        question_likes.user_id = ?
+    SQL
+
+  end
+
+  def self.num_likes_for_question_id(question_id)
+    users_arr = self.likers_for_question_id(question_id)
+    users_arr.length
   end
 
   def update
