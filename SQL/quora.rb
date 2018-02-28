@@ -27,6 +27,19 @@ class Users
     Replies.find_by_user_id(self.id)
   end
 
+  def liked_questions
+    QuestionLikes.liked_questions_for_user_id(self.id)
+  end
+
+  def average_karma
+    questions_by_me = authored_questions
+    sum_likes = 0
+    questions_by_me.each do |question|
+      sum_likes += question.num_likes
+    end
+    sum_likes / questions_by_me.length
+  end
+
   def self.find_by_name(fname, lname)
     user = QuoraDBConnection.instance.execute(<<-SQL, fname, lname)
       SELECT
@@ -146,6 +159,18 @@ class Question
     Question.new(ques.first)
   end
 
+  def likers
+    QuestionLikes.likers_for_question_id(self.id)
+  end
+
+  def num_likes
+    QuestionLikes.num_likes_for_question_id(self.id)
+  end
+
+  def self.most_liked(n)
+    QuestionLikes.most_liked_questions(n)
+  end
+
   def self.find_by_author_id(author_id)
     ques = QuoraDBConnection.instance.execute(<<-SQL, author_id)
       SELECT
@@ -157,7 +182,7 @@ class Question
     SQL
     return nil unless ques.length > 0 # person is stored in an array!
 
-    Question.new(ques.first)
+    ques.map {|obj| Question.new(obj)}
   end
 
   def self.find_by_id(id)
@@ -460,6 +485,23 @@ class QuestionLikes
     @id = QuoraDBConnection.instance.last_insert_row_id
   end
 
+  def self.most_liked_questions(n)
+    QuoraDBConnection.instance.execute(<<-SQL, n)
+      SELECT
+        questions.*
+      FROM
+        questions
+      JOIN
+        question_likes ON questions.id = question_likes.question_id
+      GROUP BY
+       question_likes.question_id
+      ORDER BY
+      COUNT(question_likes.question_id)
+       DESC
+      LIMIT(?)
+    SQL
+  end
+
   def self.likers_for_question_id(question_id)
     QuoraDBConnection.instance.execute(<<-SQL, question_id)
       SELECT
@@ -474,7 +516,7 @@ class QuestionLikes
   end
 
   def self.likes_questions_for_user_id(user_id)
-    QuoraDBConnection.instance.execute(<<-SQL, user_id)
+    queries = QuoraDBConnection.instance.execute(<<-SQL, user_id)
       SELECT
         questions.*
       FROM
@@ -485,6 +527,7 @@ class QuestionLikes
         question_likes.user_id = ?
     SQL
 
+    queries.map{ |datum| Question.new(datum) }
   end
 
   def self.num_likes_for_question_id(question_id)
